@@ -1,7 +1,9 @@
+CC ?= gcc
+
 default:			TouchpadEmulator
 
 TouchpadEmulator:	TouchpadEmulator.c
-					gcc -Wall $(shell pkg-config --cflags dbus-1 dbus-glib-1) TouchpadEmulator.c -ldbus-1 -ldbus-glib-1 -lpthread -o TouchpadEmulator
+					$(CC) -Wall $(shell pkg-config --cflags dbus-1 dbus-glib-1) TouchpadEmulator.c -ldbus-1 -ldbus-glib-1 -lpthread -o TouchpadEmulator
 
 clean:
 					git clean -dfx

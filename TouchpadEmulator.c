@@ -64,6 +64,7 @@ typedef struct
 } event_names_type;
 
 #define NUM_KNOWN_DEVICES 7
+#define SPEED_RATIO 7
 
 static const event_names_type known_devices[NUM_KNOWN_DEVICES] =
 {
@@ -197,6 +198,7 @@ void open_uinput(int* fd)
     ioctl(*fd, UI_SET_RELBIT, REL_X);
     ioctl(*fd, UI_SET_RELBIT, REL_Y);
     ioctl(*fd, UI_SET_RELBIT, REL_WHEEL);
+    ioctl(*fd, UI_SET_RELBIT, REL_WHEEL_HI_RES);
 
     ioctl(*fd, UI_SET_PROPBIT, INPUT_PROP_DIRECT);
 
@@ -1104,10 +1106,10 @@ int main(int argc, char* argv[])
             | Enable manual rotation if automatic rotation  |
             | could not be enabled                          |
             \*---------------------------------------------*/
-            printf("Orientation could not be determined from accelerometer, defaulting to 0 degrees.\r\n");
+            rotation                 = 90;
+            printf("Orientation could not be determined from accelerometer, defaulting to %d degrees.\r\n", rotation);
             printf("Long-press Volume Up button to change orientations manually.\r\n");
             button_0_long_hold_event = BUTTON_EVENT_CHANGE_ORIENTATION;
-            rotation                 = 0;
         }
     }
 
@@ -1125,6 +1127,8 @@ int main(int argc, char* argv[])
     ioctl(touchscreen_fd, EVIOCGABS(ABS_MT_POSITION_X), &max_x);
     ioctl(touchscreen_fd, EVIOCGABS(ABS_MT_POSITION_Y), &max_y);
 
+    // max_x.maximum = 2880;
+    // max_y.maximum = 1800;
     printf("Touchscreen Max X:%d, Max y:%d\r\n", max_x.maximum, max_y.maximum);
 
     /*-----------------------------------------------------*\
@@ -1509,7 +1513,6 @@ int main(int argc, char* argv[])
                     {
                         touchscreen_event.value = max_x.maximum - touchscreen_event.value;
                     }
-                    
                     if(touch_active)
                     {
                         /*---------------------------------*\
@@ -1522,11 +1525,11 @@ int main(int argc, char* argv[])
                             {
                                 if(rotation == 0 || rotation == 180)
                                 {
-                                    emit(virtual_mouse_fd, EV_REL, REL_X, touchscreen_event.value - prev_x);
+                                    emit(virtual_mouse_fd, EV_REL, REL_X, (touchscreen_event.value - prev_x) / SPEED_RATIO);
                                 }
                                 else if(rotation == 90 || rotation == 270)
                                 {
-                                    emit(virtual_mouse_fd, EV_REL, REL_Y, touchscreen_event.value - prev_x);
+                                    emit(virtual_mouse_fd, EV_REL, REL_Y, (touchscreen_event.value - prev_x) / SPEED_RATIO);
                                 }
                             }
                                 
@@ -1551,9 +1554,10 @@ int main(int argc, char* argv[])
                                 {
                                     int accumulator_wheel_x = touchscreen_event.value;
                                     
-                                    if(abs(accumulator_wheel_x - prev_wheel_x) > 15)
+                                    if(abs(accumulator_wheel_x - prev_wheel_x) > 1) //15
                                     {
-                                        emit(virtual_mouse_fd, EV_REL, REL_WHEEL, (accumulator_wheel_x - prev_wheel_x) / 10);
+					int down = (accumulator_wheel_x - prev_wheel_x) / 10;
+                                        emit(virtual_mouse_fd, EV_REL, REL_WHEEL_HI_RES, down);
                                         prev_wheel_x = accumulator_wheel_x;
                                     }
                                 }
@@ -1604,11 +1608,11 @@ int main(int argc, char* argv[])
                             {
                                 if(rotation == 0 || rotation == 180)
                                 {
-                                    emit(virtual_mouse_fd, EV_REL, REL_Y, touchscreen_event.value - prev_y);
+                                    emit(virtual_mouse_fd, EV_REL, REL_Y, (touchscreen_event.value - prev_y) / SPEED_RATIO);
                                 }
                                 else if(rotation == 90 || rotation == 270)
                                 {
-                                    emit(virtual_mouse_fd, EV_REL, REL_X, touchscreen_event.value - prev_y);
+                                    emit(virtual_mouse_fd, EV_REL, REL_X, (touchscreen_event.value - prev_y) / SPEED_RATIO);
                                 }
                             }
             
@@ -1633,9 +1637,9 @@ int main(int argc, char* argv[])
                                 {
                                     int accumulator_wheel_y = touchscreen_event.value;
                                     
-                                    if(abs(accumulator_wheel_y - prev_wheel_y) > 15)
+                                    if(abs(accumulator_wheel_y - prev_wheel_y) > 2) // 15
                                     {
-                                        emit(virtual_mouse_fd, EV_REL, REL_WHEEL, (accumulator_wheel_y - prev_wheel_y) / 10);
+                                        emit(virtual_mouse_fd, EV_REL, REL_WHEEL, (accumulator_wheel_y - prev_wheel_y) / 10 / SPEED_RATIO / 10);
                                         prev_wheel_y = accumulator_wheel_y;
                                     }
                                 }

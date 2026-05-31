@@ -333,7 +333,6 @@ void enable_touchpad()
 
 void toggle_touchpad()
 {
-    printf("Really, really toggling touchpad, enable now is %d.\n", touchpad_enable);
     if(!touchpad_enable)
     {
         enable_touchpad();
@@ -1136,6 +1135,7 @@ int main(int argc, char* argv[])
     int button_1_short_hold_event  = BUTTON_EVENT_DISABLE_TOUCHPAD_TOGGLE_KEYBOARD;
     int button_1_click_event       = BUTTON_EVENT_EMIT_VOLUMEDOWN;
     int button_2_click_event       = BUTTON_EVENT_TOGGLE_TOUCHPAD;
+    struct timeval button_2_last_click;
 
     /*-----------------------------------------------------*\
     | Otherwise, query rotation from accelerometer and      |
@@ -1863,7 +1863,17 @@ int main(int argc, char* argv[])
         if(ret > 0) {
             if(touchpad_toggle_event.type == EV_KEY && touchpad_toggle_event.code == KEY_F21)
             {
-                process_button_event(button_2_click_event);
+                struct timeval ret_time;
+                timersub(&touchpad_toggle_event.time, &button_2_last_click, &ret_time);
+
+                button_2_last_click.tv_sec = touchpad_toggle_event.time.tv_sec;
+                button_2_last_click.tv_usec = touchpad_toggle_event.time.tv_usec;
+
+                unsigned int usec = (ret_time.tv_sec * 1000000) + ret_time.tv_usec;
+                if (usec > 1000000) {
+                    printf("Toggling touchpad...\n");
+                    process_button_event(button_2_click_event);
+                }
             }
         }
 

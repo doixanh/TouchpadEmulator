@@ -199,6 +199,7 @@ void open_uinput(int* fd)
     ioctl(*fd, UI_SET_RELBIT, REL_Y);
     ioctl(*fd, UI_SET_RELBIT, REL_WHEEL);
     ioctl(*fd, UI_SET_RELBIT, REL_WHEEL_HI_RES);
+    ioctl(*fd, UI_SET_RELBIT, REL_HWHEEL_HI_RES);
 
     ioctl(*fd, UI_SET_PROPBIT, INPUT_PROP_DIRECT);
 
@@ -1106,7 +1107,7 @@ int main(int argc, char* argv[])
             | Enable manual rotation if automatic rotation  |
             | could not be enabled                          |
             \*---------------------------------------------*/
-            rotation                 = 90;
+            rotation                 = 0;
             printf("Orientation could not be determined from accelerometer, defaulting to %d degrees.\r\n", rotation);
             printf("Long-press Volume Up button to change orientations manually.\r\n");
             button_0_long_hold_event = BUTTON_EVENT_CHANGE_ORIENTATION;
@@ -1207,8 +1208,8 @@ int main(int argc, char* argv[])
     timer_create(CLOCK_MONOTONIC, &ev, &timer);
 
     struct itimerspec itime_start;
-    itime_start.it_value.tv_sec     = 1;
-    itime_start.it_value.tv_nsec    = 0;
+    itime_start.it_value.tv_sec     = 0;
+    itime_start.it_value.tv_nsec    = 400000000;
     itime_start.it_interval.tv_sec  = 0;
     itime_start.it_interval.tv_nsec = 0;
 
@@ -1550,14 +1551,15 @@ int main(int argc, char* argv[])
                             }
                             else
                             {
-                                if(rotation == 90 || rotation == 270)
+                                //if(rotation == 90 || rotation == 270)
                                 {
                                     int accumulator_wheel_x = touchscreen_event.value;
                                     
                                     if(abs(accumulator_wheel_x - prev_wheel_x) > 1) //15
                                     {
-					int down = (accumulator_wheel_x - prev_wheel_x) / 10;
-                                        emit(virtual_mouse_fd, EV_REL, REL_WHEEL_HI_RES, down);
+					                    int down = (accumulator_wheel_x - prev_wheel_x) / 3;
+                                        // printf("scroll down, acc wheel %d, prev wheel %d, down %d\n",accumulator_wheel_x,prev_wheel_x, down);
+                                        emit(virtual_mouse_fd, EV_REL, REL_HWHEEL_HI_RES, -down);
                                         prev_wheel_x = accumulator_wheel_x;
                                     }
                                 }
@@ -1636,10 +1638,10 @@ int main(int argc, char* argv[])
                                 if(rotation == 0 || rotation == 180)
                                 {
                                     int accumulator_wheel_y = touchscreen_event.value;
-                                    
                                     if(abs(accumulator_wheel_y - prev_wheel_y) > 2) // 15
                                     {
-                                        emit(virtual_mouse_fd, EV_REL, REL_WHEEL, (accumulator_wheel_y - prev_wheel_y) / 10 / SPEED_RATIO / 10);
+                                        int right = (accumulator_wheel_y - prev_wheel_y) / 5;
+                                        emit(virtual_mouse_fd, EV_REL, REL_WHEEL_HI_RES, right);
                                         prev_wheel_y = accumulator_wheel_y;
                                     }
                                 }

@@ -59,22 +59,25 @@ typedef struct
     char *  touchscreen;
     char *  button_0;
     char *  button_1;
+    char *  button_2;
     char *  slider;
     char *  device;
 } event_names_type;
 
-#define NUM_KNOWN_DEVICES 7
+#define NUM_KNOWN_DEVICES 8
+#define MAXDEV 5
 #define SPEED_RATIO 7
 
 static const event_names_type known_devices[NUM_KNOWN_DEVICES] =
 {
-    { "Goodix Capacitive TouchScreen",  "1c21800.lradc",    "",             "",             "PINE64 PinePhone"      },
-    { "Goodix Capacitive TouchScreen",  "adc-keys",         "",             "",             "PINE64 PinePhone Pro"  },
-    { "Synaptics S3706B",               "Volume keys",      "",             "Alert slider", "OnePlus 6T"            },
-    { "NVTCapacitiveTouchScreen",       "gpio-keys",        "pm8941_resin", "",             "Xiaomi Pad 5 Pro"      },
-    { "Synaptics S3706B",               "gpio-keys",        "pm8941_resin", "",             "Google Pixel 3a"       },
-    { "nvt-ts",                         "gpio-keys",        "pm8941_resin", "",             "Xiaomi Poco F1"        },
-    { "Synaptics PLG218",               "gpio-keys",        "",             "",             "LG Google Nexus 5"     },
+    { "Goodix Capacitive TouchScreen",  "1c21800.lradc",    "",                "", "",               "PINE64 PinePhone"      },
+    { "Goodix Capacitive TouchScreen",  "adc-keys",         "",                "", "",               "PINE64 PinePhone Pro"  },
+    { "Synaptics S3706B",               "Volume keys",      "",                "", "Alert slider",   "OnePlus 6T"            },
+    { "NVTCapacitiveTouchScreen",       "gpio-keys",        "pm8941_resin",    "", "",               "Xiaomi Pad 5 Pro"      },
+    { "NVTCapacitiveTouchScreen",       "gpio-keys",        "pm8941_resin",    "Xiaomi Keyboard", "","Xiaomi Pad 6S Pro"     },
+    { "Synaptics S3706B",               "gpio-keys",        "pm8941_resin",    "", "",               "Google Pixel 3a"       },
+    { "nvt-ts",                         "gpio-keys",        "pm8941_resin",    "", "",               "Xiaomi Poco F1"        },
+    { "Synaptics PLG218",               "gpio-keys",        "",                "", "",               "LG Google Nexus 5"     },
 };
 
 /*---------------------------------------------------------*\
@@ -91,6 +94,7 @@ enum
     BUTTON_EVENT_CHANGE_ORIENTATION,
     BUTTON_EVENT_DISABLE_TOUCHPAD_ENABLE_KEYBOARD,
     BUTTON_EVENT_DISABLE_TOUCHPAD_DISABLE_KEYBOARD,
+    BUTTON_EVENT_TOGGLE_TOUCHPAD,
 };
 
 /*---------------------------------------------------------*\
@@ -103,6 +107,7 @@ bool    no_keyboard         = false;
 
 int     button_0_fd         = 0;
 int     button_1_fd         = 0;
+int     button_2_fd         = 0;
 int     slider_fd           = 0;
 int     touchscreen_fd      = 0;
 int     virtual_buttons_fd  = 0;
@@ -321,6 +326,25 @@ void enable_touchpad()
 }
 
 /*---------------------------------------------------------*\
+| toggle_touchpad                                           |
+|                                                           |
+| Toggle the emulated touchpad                              |
+\*---------------------------------------------------------*/
+
+void toggle_touchpad()
+{
+    printf("Really, really toggling touchpad, enable now is %d.\n", touchpad_enable);
+    if(!touchpad_enable)
+    {
+        enable_touchpad();
+    }
+    else 
+    {
+        disable_touchpad();
+    }
+}
+
+/*---------------------------------------------------------*\
 | query_accelerometer_orientation                           |
 |                                                           |
 | Query DBus for the AccelerometerOrientation property of   |
@@ -527,6 +551,7 @@ bool scan_and_open_auto(bool no_buttons)
     int     event_id            = 0;
     bool    button_0_found      = false;
     bool    button_1_found      = false;
+    bool    button_2_found      = false;
     bool    touchscreen_found   = false;
 
     /*-----------------------------------------------------*\
@@ -537,6 +562,7 @@ bool scan_and_open_auto(bool no_buttons)
     {
         button_0_found = true;
         button_1_found = true;
+        button_2_found = true;
     }
     
     /*-----------------------------------------------------*\
@@ -545,6 +571,7 @@ bool scan_and_open_auto(bool no_buttons)
     touchscreen_fd  = -1;
     button_0_fd     = -1;
     button_1_fd     = -1;
+    button_2_fd     = -1;
     slider_fd       = -1;
 
     while(1)
@@ -553,7 +580,6 @@ bool scan_and_open_auto(bool no_buttons)
         | Create the input event path                       |
         \*-------------------------------------------------*/
         snprintf(input_dev_buf, 1024, "/dev/input/event%d", event_id);
-
         /*-------------------------------------------------*\
         | Open the input event path                         |
         \*-------------------------------------------------*/
@@ -609,6 +635,18 @@ bool scan_and_open_auto(bool no_buttons)
         }
 
         /*-------------------------------------------------*\
+        | Check if this device is Toggle Touchpad           |
+        \*-------------------------------------------------*/
+        if(!button_2_found
+        && test_bit(EV_SYN,             capabilities[0])
+        && test_bit(EV_KEY,             capabilities[0])
+        && test_bit(KEY_F21,            capabilities[EV_KEY]))
+        {
+            button_2_fd         = input_fd;
+            button_2_found      = true;
+        }
+
+        /*-------------------------------------------------*\
         | Check if this device is Touchscreen               |
         \*-------------------------------------------------*/
         if(!touchscreen_found
@@ -631,7 +669,8 @@ bool scan_and_open_auto(bool no_buttons)
         \*-------------------------------------------------*/
         if(touchscreen_fd != input_fd
         && button_0_fd    != input_fd
-        && button_1_fd    != input_fd)
+        && button_1_fd    != input_fd
+        && button_2_fd    != input_fd)
         {
             close(input_fd);
         }
@@ -655,7 +694,7 @@ bool scan_and_open_auto(bool no_buttons)
     | Return true if touchscreen, volume up, and volume     |
     | down were all found                                   |
     \*-----------------------------------------------------*/
-    if(touchscreen_found && button_0_found && button_1_found)
+    if(touchscreen_found && button_0_found && button_1_found && button_2_found)
     {
         printf( "Opened device Automatic with:\r\n");
 
@@ -667,12 +706,17 @@ bool scan_and_open_auto(bool no_buttons)
         if(button_0_fd > 0)
         {
             ioctl(button_0_fd, EVIOCGNAME(sizeof(input_dev_buf)), input_dev_buf);
-            printf("    Buttons:     %s\r\n", input_dev_buf);
+            printf("    Buttons UP:   %s\r\n", input_dev_buf);
         }
         if(button_1_fd > 0)
         {
             ioctl(button_1_fd, EVIOCGNAME(sizeof(input_dev_buf)), input_dev_buf);
-            printf("    Buttons:     %s\r\n", input_dev_buf);
+            printf("    Buttons DOWN: %s\r\n", input_dev_buf);
+        }
+        if(button_2_fd > 0)
+        {
+            ioctl(button_2_fd, EVIOCGNAME(sizeof(input_dev_buf)), input_dev_buf);
+            printf("    Buttons TOUCH:%s\r\n", input_dev_buf);
         }
 
         return true;
@@ -680,6 +724,7 @@ bool scan_and_open_auto(bool no_buttons)
     
     close(button_0_fd);
     close(button_1_fd);
+    close(button_2_fd);
     close(touchscreen_fd);
 
     return false;
@@ -691,19 +736,20 @@ bool scan_and_open_auto(bool no_buttons)
 | Scan for and open devices matching the given names        |
 \*---------------------------------------------------------*/
 
-bool scan_and_open_devices(char* touchscreen_device, char* button_0_device, char* button_1_device, char* slider_device)
+bool scan_and_open_devices(char* touchscreen_device, char* button_0_device, char* button_1_device, char* button_2_device, char* slider_device)
 {
-    char*   device_name[4];
-    bool    device_required[4];
-    int     device_id[4];
+    char*   device_name[MAXDEV];
+    bool    device_required[MAXDEV];
+    int     device_id[MAXDEV];
     int     event_id        = 0;
     
     device_name[0] = touchscreen_device;
     device_name[1] = button_0_device;
     device_name[2] = button_1_device;
-    device_name[3] = slider_device;
+    device_name[3] = button_2_device;
+    device_name[4] = slider_device;
 
-    for(int i = 0; i < 4; i++)
+    for(int i = 0; i < MAXDEV; i++)
     {
         device_required[i] = false;
         device_id[i]       = -1;
@@ -742,7 +788,7 @@ bool scan_and_open_devices(char* touchscreen_device, char* button_0_device, char
         /*-------------------------------------------------*\
         | Check if this input matches any of our devices    |
         \*-------------------------------------------------*/
-        for(int i = 0; i < 4; i++)
+        for(int i = 0; i < MAXDEV; i++)
         {
             if(device_required[i] && (strncmp(input_dev_buf, device_name[i], strlen(device_name[i])) == 0))
             {
@@ -752,7 +798,7 @@ bool scan_and_open_devices(char* touchscreen_device, char* button_0_device, char
 
         all_found = true;
 
-        for(int i = 0; i < 4; i++)
+        for(int i = 0; i < MAXDEV; i++)
         {
             if(device_required[i] && device_id[i] == -1)
             {
@@ -797,13 +843,22 @@ bool scan_and_open_devices(char* touchscreen_device, char* button_0_device, char
     snprintf(button_1_dev_path, 1024, "/dev/input/event%d", device_id[2]);
 
     button_1_fd = open(button_1_dev_path, O_RDONLY|O_NONBLOCK);
-    
+
+    /*-----------------------------------------------------*\
+    | Open the button 2 device                              |
+    \*-----------------------------------------------------*/
+    char button_2_dev_path[1024];
+
+    snprintf(button_2_dev_path, 1024, "/dev/input/event%d", device_id[3]);
+
+    button_2_fd = open(button_2_dev_path, O_RDONLY|O_NONBLOCK);
+
     /*-----------------------------------------------------*\
     | Open the slider device                                |
     \*-----------------------------------------------------*/
     char slider_dev_path[1024];
 
-    snprintf(slider_dev_path, 1024, "/dev/input/event%d", device_id[3]);
+    snprintf(slider_dev_path, 1024, "/dev/input/event%d", device_id[4]);
 
     slider_fd = open(slider_dev_path, O_RDONLY|O_NONBLOCK);
     
@@ -820,6 +875,10 @@ void process_button_event(int event)
 {
     switch(event)
     {
+        case BUTTON_EVENT_TOGGLE_TOUCHPAD:
+            toggle_touchpad();
+            break;
+
         case BUTTON_EVENT_ENABLE_TOUCHPAD:
             enable_touchpad();
             disable_keyboard();
@@ -1006,6 +1065,7 @@ int main(int argc, char* argv[])
         char * touchscreen  = known_devices[device_idx].touchscreen;
         char * button_0     = known_devices[device_idx].button_0;
         char * button_1     = known_devices[device_idx].button_1;
+        char * button_2     = known_devices[device_idx].button_2;
         char * slider       = known_devices[device_idx].slider;
 
         if(no_slider)
@@ -1017,9 +1077,10 @@ int main(int argc, char* argv[])
         {
             button_0        = "";
             button_1        = "";
+            button_2        = "";
         }
 
-        opened = scan_and_open_devices(touchscreen, button_0, button_1, slider);
+        opened = scan_and_open_devices(touchscreen, button_0, button_1, button_2, slider);
         
         if(opened)
         {
@@ -1036,6 +1097,10 @@ int main(int argc, char* argv[])
             if(strlen(button_1) > 0)
             {
                 printf("    Buttons:     %s\r\n", button_1);
+            }
+            if(strlen(button_2) > 0)
+            {
+                printf("    Buttons:     %s\r\n", button_2);
             }
             if(strlen(slider) > 0)
             {
@@ -1070,6 +1135,7 @@ int main(int argc, char* argv[])
     int button_1_long_hold_event   = BUTTON_EVENT_CLOSE;
     int button_1_short_hold_event  = BUTTON_EVENT_DISABLE_TOUCHPAD_TOGGLE_KEYBOARD;
     int button_1_click_event       = BUTTON_EVENT_EMIT_VOLUMEDOWN;
+    int button_2_click_event       = BUTTON_EVENT_TOGGLE_TOUCHPAD;
 
     /*-----------------------------------------------------*\
     | Otherwise, query rotation from accelerometer and      |
@@ -1108,8 +1174,8 @@ int main(int argc, char* argv[])
             | could not be enabled                          |
             \*---------------------------------------------*/
             rotation                 = 0;
-            printf("Orientation could not be determined from accelerometer, defaulting to %d degrees.\r\n", rotation);
-            printf("Long-press Volume Up button to change orientations manually.\r\n");
+            // printf("Orientation could not be determined from accelerometer, defaulting to %d degrees.\r\n", rotation);
+            // printf("Long-press Volume Up button to change orientations manually.\r\n");
             button_0_long_hold_event = BUTTON_EVENT_CHANGE_ORIENTATION;
         }
     }
@@ -1181,17 +1247,19 @@ int main(int argc, char* argv[])
     /*-----------------------------------------------------*\
     | Set up file descriptor polling structures             |
     \*-----------------------------------------------------*/
-    struct pollfd fds[4];
+    struct pollfd fds[MAXDEV];
     
     fds[0].fd               = touchscreen_fd;
     fds[1].fd               = button_0_fd;
     fds[2].fd               = button_1_fd;
-    fds[3].fd               = slider_fd;
+    fds[3].fd               = button_2_fd;
+    fds[4].fd               = slider_fd;
     
     fds[0].events           = POLLIN;
     fds[1].events           = POLLIN;
     fds[2].events           = POLLIN;
     fds[3].events           = POLLIN;
+    fds[4].events           = POLLIN;
 
     /*-----------------------------------------------------*\
     | Create a timer to handle hold-to-drag                 |
@@ -1261,7 +1329,7 @@ int main(int argc, char* argv[])
         /*-------------------------------------------------*\
         | Poll until an input event occurs                  |
         \*-------------------------------------------------*/
-        int ret = poll(fds, 4, 5000);
+        int ret = poll(fds, MAXDEV, 5000);
         
         if(ret <= 0) continue;
 
@@ -1682,11 +1750,13 @@ int main(int argc, char* argv[])
 
         if(ret > 0)
         {
+            printf("button key, type %d, value %d\n", buttons_event.type, buttons_event.value);
             /*---------------------------------------------*\
             | Handle volume up key events                   |
             \*---------------------------------------------*/
             if(buttons_event.type == EV_KEY && buttons_event.code == KEY_VOLUMEUP)
             {
+                printf("button key value up, value %d\n", buttons_event.value);
                 if(buttons_event.value == 1)
                 {
                     time_button.tv_sec = buttons_event.input_event_sec;
@@ -1721,6 +1791,7 @@ int main(int argc, char* argv[])
             \*---------------------------------------------*/
             if(buttons_event.type == EV_KEY && buttons_event.code == KEY_VOLUMEDOWN)
             {
+                printf("button key value down, value %d\n", buttons_event.value);
                 if(buttons_event.value == 1)
                 {
                     time_button.tv_sec = buttons_event.input_event_sec;
@@ -1781,6 +1852,21 @@ int main(int argc, char* argv[])
                 }
             }
         }
+
+        /*-------------------------------------------------*\
+        | Read the touchpad-toggle event                    |
+        \*-------------------------------------------------*/
+        struct input_event touchpad_toggle_event;
+
+        ret = read(button_2_fd, &touchpad_toggle_event, sizeof(touchpad_toggle_event));
+        
+        if(ret > 0) {
+            if(touchpad_toggle_event.type == EV_KEY && touchpad_toggle_event.code == KEY_F21)
+            {
+                process_button_event(button_2_click_event);
+            }
+        }
+
     }
 
     sleep(1);

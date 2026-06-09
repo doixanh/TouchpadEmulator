@@ -13,6 +13,6 @@
 #
 # By default this script does nothing.
 
-chmod 666 /dev/input/*; modprobe uinput; chmod 777 /dev/uinput
+bash -c "sleep 5s; chmod 666 /dev/input/*; modprobe uinput; chmod 777 /dev/uinput"
 
 exit 0
